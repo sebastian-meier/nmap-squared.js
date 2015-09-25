@@ -1,0 +1,106 @@
+<html>
+<head>
+	<style type="text/css">
+		svg{
+			width:750px;
+			height:800px;
+		}
+	</style>
+	<script type="text/javascript" src="../lib/affinetransform.js"></script>
+	<script type="text/javascript" src="../lib/nmap.min.js"></script>
+	<script src="http://d3js.org/d3.v3.min.js"></script>
+	<script type="text/javascript" src="../nmap-squared.min.js"></script>
+</head>
+<body>
+	<svg id="svg" width="750", height="800"></svg>
+	<script type="text/javascript">
+
+		var files = [
+			"data/us_states_processed.json",
+			"data/londonBoroughs_processed.json"
+		];
+
+		for(var i = 0; i<files.length; i++){
+			processFile(files[i], i);
+		}
+
+		function processFile(file, id){
+			d3.json(file, function(data) {
+
+				//Running the algorithm
+				var border = nmap_squared({width:300,height:300,data:data,method:"border"});
+				var quad = nmap_squared({width:300,height:300,data:data,method:"quad"});
+
+				//Drawing the result
+				var g = d3.select("#svg").append("g").attr("transform", "translate("+(id*340+10)+",10)");
+				var g_border = g.append("g").attr("class", "g_border");
+				var g_quad = g.append("g").attr("class", "g_quad");
+
+				g_border.selectAll("circle").data(border.data).enter().append("circle")
+					.attr("r", 3)
+					.attr("cx", function(d){ return d.x; })
+					.attr("cy", function(d){ return d.y; })
+						.style("fill", function(d){ return ((d.class===1) ? "rgba(0,0,0,0.5)" : "rgba(255,0,0,0.5)"); });
+
+				g_quad.selectAll("circle").data(quad.data).enter().append("circle")
+					.attr("r", 3)
+					.attr("cx", function(d){ return d.x; })
+					.attr("cy", function(d){ return d.y; })
+					.style("fill", function(d){ return ((d.class===1) ? "rgba(0,0,0,0.5)" : "rgba(0,255,0,0.5)"); });
+
+				g.append("rect").attr("x",0).attr("y",0).attr("width",border.width).attr("height",border.height).style("fill","none").style("stroke","#000");
+
+				//Using nmap
+
+				//for the border
+				var border_elements = [];
+				for(var i = 0; i<border.data.length; i++){
+					border_elements.push(new nmap_element({
+						id:i,
+						x:parseFloat(border.data[i].x),
+						y:parseFloat(border.data[i].y),
+						weight:10000+Math.random(),
+						klass:border.data[i].class
+					}));
+				}
+				var border_map = new nmap({x:0,y:0,width:parseFloat(border.width), height:parseFloat(border.height)});
+				var border_ac = border_map.alternateCut({elements:border_elements});
+
+				g.append("g").attr("class", "nmap_border").attr("transform", "translate(0,"+(border.height+50)+")").selectAll("rect")
+					.data(border_ac).enter().append("rect")
+						.attr("x", function(d){ return d.attr().x })
+						.attr("y", function(d){ return d.attr().y })
+						.style("fill", function(d){ return ((d.attr().element.attr().klass == 1) ? "rgba(1,1,1,1)" : "rgba(255,255,255,0)"); })
+						.attr("width", function(d){ return d.attr().width })
+						.style("stroke","#fff")
+						.attr("height", function(d){ return d.attr().height });
+
+				//for the quad
+				var quad_elements = [];
+				for(var i = 0; i<quad.data.length; i++){
+					quad_elements.push(new nmap_element({
+						id:i,
+						x:parseFloat(quad.data[i].x),
+						y:parseFloat(quad.data[i].y),
+						weight:10000+Math.random(),
+						klass:quad.data[i].class
+					}));
+				}
+				var quad_map = new nmap({x:0,y:0,width:parseFloat(quad.width), height:parseFloat(quad.height)});
+				var quad_ac = quad_map.alternateCut({elements:quad_elements});
+
+				g.append("g").attr("class", "nmap_quad").attr("transform", "translate(0,"+(border.height*2+90)+")").selectAll("rect")
+					.data(quad_ac).enter().append("rect")
+						.attr("x", function(d){ return d.attr().x })
+						.attr("y", function(d){ return d.attr().y })
+						.style("fill", function(d){ return ((d.attr().element.attr().klass == 1) ? "rgba(1,1,1,1)" : "rgba(255,255,255,0)"); })
+						.style("stroke","#fff")
+						.attr("width", function(d){ return d.attr().width })
+						.attr("height", function(d){ return d.attr().height });
+
+			});
+		}
+
+	</script>
+</body>
+</html>

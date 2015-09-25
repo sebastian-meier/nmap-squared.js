@@ -1,0 +1,457 @@
+<html>
+	<head>
+		<style type="text/css">
+			body,html{
+				margin:0;
+				padding:0;
+				font-family: Helvetica, sans-serif;
+				font-size:10px;
+			}
+
+			svg, div{
+				float:left;
+				width:300px;
+				height:300px;
+				margin:30px 0 0 30px;
+			}
+
+			rect{
+				fill:none;
+				stroke:#555;
+				stroke-width:0.5;
+				stroke-opacity:0.5;
+			}
+
+			.grid rect{
+				stroke:rgba(0,0,0,0.2);	
+				stroke-width:1;
+			}
+
+			rect.border{
+				stroke-opacity:1;
+				stroke-width:1;
+			}
+
+			rect.plus{
+				fill:blue;
+			}
+
+			rect.minus{
+				fill:red;
+			}
+
+			rect.black{
+				fill:red;
+				fill-opacity:1 !important;
+			}
+
+			.testing rect{
+				stroke-width:1;
+				stroke:green;
+				fill:none;
+			}
+		</style>
+		<script src="http://d3js.org/d3.v3.min.js"></script>
+	</head>
+	<body>
+		<svg id="svg1" width="300" height="300"></svg>
+		<svg id="svg2" width="300" height="300"></svg>
+		<svg id="svg3" width="300" height="300"></svg>
+		<div><p>
+			<strong>black dots:</strong> Original Dataset<br />
+			<strong>red filled dots:</strong> new dots via quadtree approach<br />
+			<strong>red stroke dots not black fill:</strong> new dots via border approach<br />
+			<strong>grey rectangles:</strong> empty rectangles from quadtree<br /><br />
+			<strong>Dataset #1:</strong> German States (not modified)<br />
+			<strong>Dataset #2:</strong> London Boroughs (3 points added)<br />
+			<strong>Dataset #3:</strong> US States (12 points added)<br />
+		</p></div>
+		<script type="text/javascript">
+
+		function buildNMAP(svg, file){
+			var width = 300, height = 300;
+
+			var position_data, maxX,maxY,minX,minY,sx,sy,swidth,sheight,ss=false,amount,grid_size,sq_amount,sq_missing,emptySqares;
+			//d3.csv("data/londonBoroughs.csv", function(error, data) {
+			d3.json(file, function(data) {
+				position_data = data;
+
+				calculateExtent();
+				drawPoints();
+				drawExtent();
+
+				amount = position_data.length;
+				grid_size = Math.ceil(Math.sqrt(position_data.length));
+				sq_amount = Math.pow(grid_size,2);
+				sq_missing = sq_amount-amount;
+
+				drawGrid();
+
+				findEmptyCells('border');
+				findEmptyCells('quad');
+			});
+
+			function findEmptyCells(approach){
+				switch(approach){
+					case 'border':
+						findEmptyCells_border();
+					break;
+					case 'quad':
+						findEmptyCells_quad();
+					break;
+				}
+			}
+
+			function findEmptyCells_border(){
+				var extra_points = [];
+
+				svg.select("g.epoints").remove();
+				var epoints = svg.append("g").attr("class","epoints");
+
+				for(var x = 0; x<grid_size; x++){
+					extra_points.push({dist:Number.MAX_VALUE,sx:((swidth*sx)/grid_size*x+((swidth*sx)/grid_size/2)),sy:0});
+					extra_points.push({dist:Number.MAX_VALUE,sx:((swidth*sx)/grid_size*x+((swidth*sx)/grid_size/2)),sy:(sheight*sy)});
+				}
+
+				for(var y = 0; y<grid_size; y++){
+					extra_points.push({dist:Number.MAX_VALUE,sx:0, sy:((sheight*sy)/grid_size*y+((sheight*sy)/grid_size/2))});
+					extra_points.push({dist:Number.MAX_VALUE,sx:(swidth*sx),sy:((sheight*sy)/grid_size*y+((sheight*sy)/grid_size/2))});
+				}
+
+				var new_position_data = [];
+				for(var i = 0; i<position_data.length; i++){
+					var p = position_data[i];
+					p.class = 1;
+					new_position_data.push(p);
+				}
+
+				//calculate distance
+				var t_sq_missing = sq_missing;
+
+				while(t_sq_missing>0){
+					extra_points = calcDist(extra_points, new_position_data);
+					var p = extra_points[extra_points.length-1];
+					p.class = 0;
+					new_position_data.push(p);
+					t_sq_missing--;					
+				}
+
+				//console.log("BORDER:", JSON.stringify({width:swidth*sx, height:sheight*sy, points:new_position_data}));
+
+				epoints.selectAll("circle").data(new_position_data).enter().append("circle")
+					.attr("r", 8)
+					.attr("cx", function(d){return d.sx;})
+					.attr("cy", function(d){return d.sy;})
+					.style("fill", "rgba(0,0,0,0)")
+					.style("stroke", "rgba(255,0,0,1)");
+			}
+
+			function calcDist(array1, array2){
+				for(var i = 0; i<array1.length; i++){
+					for(var ii = 0; ii<array2.length; ii++){
+						var t_dist = Math.sqrt((array1[i].sx-array2[ii].sx)*(array1[i].sx-array2[ii].sx)+(array1[i].sy-array2[ii].sy)*(array1[i].sy-array2[ii].sy));
+						if(t_dist < array1[i].dist){
+							array1[i].dist = t_dist;
+						}
+					}
+				}
+
+				array1.sort(function(a1,a2){
+					if(a1.dist < a2.dist){
+						return -1;
+					}else if(a1.dist > a2.dist){
+						return 1;
+					}else{
+						return 0;
+					}
+				});
+
+				return array1;
+			}
+
+			function findEmptyCells_quad(){
+				var prep_data = [];
+				for(var i = 0; i<position_data.length; i++){
+					prep_data.push([position_data[i].sx, position_data[i].sy]);
+				}
+
+				var ex = [[0,0],[(swidth*sx), (sheight*sy)]];
+				var quadtree = d3.geom.quadtree()
+					.extent(ex)
+					(prep_data);
+
+				svg.select("g.quad").remove();
+				var quad = svg.append("g").attr("class", "quad");
+
+				quad.selectAll(".node")
+						.data(nodes(quadtree))
+					.enter().append("rect")
+						.attr("class", "node")
+						.attr("x", function(d) { return d.x; })
+						.attr("y", function(d) { return d.y; })
+						.style("fill", "rgba(0,0,0,0)")
+						.style("stroke", "rgba(0,255,0,1)")
+						.style("stroke-width", "2")
+						.attr("width", function(d) { return d.width; })
+						.attr("height", function(d) { return d.height; });
+
+				emptySqares = [];
+				var qwidth = swidth*sx;
+				var qheight = sheight*sy;
+				if(qwidth < qheight){qwidth = qheight;}{qheight = qwidth;}
+				checkForEmptySquares(quadtree, 0, qwidth, qheight, 0, 0);
+
+				emptySqares = measureSquares(emptySqares, swidth*sx, sheight*sy);
+
+				quad.selectAll(".empty")
+						.data(emptySqares)
+					.enter().append("rect")
+						.attr("class","empty")
+						.attr("x",function(d){return d.x;})
+						.attr("y",function(d){return d.y;})
+						.attr("width",function(d){return d.swidth;})
+						.attr("height",function(d){return d.sheight;})
+						.style("fill", function(d){return "rgba(0,0,0,0.5)";});
+
+				var new_position_data = [];
+				var new_t_position_data = [];
+				for(var i = 0; i<position_data.length; i++){
+					var p = position_data[i];
+					p.class = 1;
+					new_t_position_data.push(p);
+				}
+				var t_sq_missing = sq_missing;
+
+				//calculate distance
+				while(t_sq_missing>0){
+					var p = emptySqares[(emptySqares.length-t_sq_missing)];
+					p.class = 0;
+					p.sx = (p.x+p.swidth/2);
+					p.sy = (p.y+p.sheight/2);
+					console.log(p.x, p.y);
+					new_position_data.push(p);
+					new_t_position_data.push(p);
+					t_sq_missing--;					
+				}
+
+				//console.log("QUAD:", JSON.stringify({width:swidth*sx, height:sheight*sy, points:new_t_position_data}));
+
+				quad.selectAll("circle").data(new_position_data).enter().append("circle")
+					.attr("r", 8)
+					.attr("cx", function(d){return d.sx;})
+					.attr("cy", function(d){return d.sy;})
+					.style("fill", "rgba(255,0,0,1)");
+			}
+
+			function measureSquares(squares, width, height){
+				for(var i = 0; i<squares.length; i++){
+					squares[i].swidth = squares[i].width;
+					squares[i].sheight = squares[i].height;
+
+					if((squares[i].x > width)||(squares[i].y > height)){
+						squares[i].size = 0;
+					}else{
+						if((squares[i].x+squares[i].width) > width){
+							squares[i].swidth = width-squares[i].x;
+						}
+						if((squares[i].y+squares[i].height) > height){
+							squares[i].sheight = height-squares[i].y;
+						}
+						squares[i].size = squares[i].sheight*squares[i].swidth;
+					}
+				}
+
+				squares.sort(function(a1, a2){
+					if(a1.size < a2.size){
+						return -1;
+					}else if(a1.size > a2.size){
+						return 1;
+					}else{
+						return 0;
+					}
+				});
+
+				return squares;
+			}
+
+			function checkForEmptySquares(node, level, width, height, x, y){
+				if(!node.leaf){
+					var real_length = 0;
+					for(var i in node.nodes){
+						real_length++;
+					}
+					if(real_length<4){
+						var missings = [];
+						for(var i = 0; i<4; i++){
+							if(!(i in node.nodes)){
+								missings.push(i);
+							}
+						}
+						var missed = [];
+
+						if((missings.indexOf(0)>=0)&&(missings.indexOf(1)>=0)){
+							missed.push(0);
+							missed.push(1);
+							emptySqares.push(createMissingRect(2, 1, level, width, height, x, y));
+						}else if((missings.indexOf(2)>=0)&&(missings.indexOf(3)>=0)){
+							missed.push(2);
+							missed.push(3);
+							emptySqares.push(createMissingRect(2, 1, level, width, height, x, y+(height/2)));
+						}else if((missings.indexOf(0)>=0)&&(missings.indexOf(2)>=0)){
+							missed.push(0);
+							missed.push(2);
+							emptySqares.push(createMissingRect(1, 2, level, width, height, x, y));
+						}else if((missings.indexOf(1)>=0)&&(missings.indexOf(3)>=0)){
+							missed.push(1);
+							missed.push(3);
+							emptySqares.push(createMissingRect(1, 2, level, width, height, x+(width/2), y));
+						}
+
+						for(var i = 0; i<4; i++){
+							if((missed.indexOf(parseInt(i))<0)&&(missings.indexOf(parseInt(i))>=0)){
+								var x_dist=0, y_dist=0;
+								switch(parseInt(i)){
+									case 0:
+										//nothing
+									break;
+									case 1:
+										x_dist =(width/2);
+									break;
+									case 2:
+										y_dist = (height/2);
+									break;
+									case 3:
+										x_dist = (width/2);
+										y_dist = (height/2);
+									break;
+								}
+								emptySqares.push(createMissingRect(1, 1, level, width, height, x+x_dist, y+y_dist));	
+							}
+						}
+					}
+					for(var i = 0; i<4; i++){
+						if((i in node.nodes)){
+							var x_dist=0, y_dist=0;
+							switch(parseInt(i)){
+								case 0:
+									//nothing
+								break;
+								case 1:
+									x_dist = (width/2);
+								break;
+								case 2:
+									y_dist = (height/2);
+								break;
+								case 3:
+									x_dist = (width/2);
+									y_dist = (height/2);
+								break;
+							}
+							checkForEmptySquares(node.nodes[i], level+1, (width/2), (height/2), x+x_dist, y+y_dist);
+						}
+					}
+				}
+			}
+
+			function createMissingRect(x_dist, y_dist, level, width, height, x, y){
+				return {
+					x : x,
+					y : y,
+					height : (height/2)*y_dist,
+					width : (width/2)*x_dist,
+					level : level
+				};
+			}
+
+			function nodes(quadtree) {
+				var nodes = [];
+				quadtree.visit(function(node, x1, y1, x2, y2) {
+					nodes.push({leaf:node.lefa, x: x1, y: y1, width: x2 - x1, height: y2 - y1});
+				});
+				return nodes;
+			}
+
+			function drawPoints(){
+				svg.select("g.points").remove();
+				var points = svg.append("g").attr("class", "points");
+				points.selectAll("circle")
+					.data(position_data).enter().append("circle")
+						.attr("r", 5)
+						.style("fill", "rgba(0,0,0,1)")
+						.attr("cx", function (d){ return d.sx; })
+						.attr("cy", function (d){ return d.sy; });
+			}
+
+			function drawExtent(){
+				svg.select("g.extent").remove();
+				var extent = svg.append("g").attr("class", "extent");
+				extent.append("rect")
+					.attr("x",0)
+					.attr("y",0)
+					.attr("width",(swidth*sx))
+					.attr("height",(sheight*sy))
+					.style("stroke","rgba(0,0,0,1)");
+			}
+
+			function drawGrid(){
+				svg.select("g.grid").remove();
+				var grid = svg.append("g").attr("class","grid");
+				for(var x = 0; x<grid_size; x++){
+					for(var y = 0; y<grid_size; y++){
+						grid.append("rect")
+							.attr("width", (swidth*sx)/grid_size)
+							.attr("height", (sheight*sy)/grid_size)
+							.attr("x",((swidth*sx)/grid_size*x))
+							.attr("y",((sheight*sy)/grid_size*y))
+							.style("stroke", "rgab(0,0,0,0.5)");
+					}	
+				}
+			}
+
+			function calculateExtent(){
+				maxX = -Number.MAX_VALUE;
+				minX = Number.MAX_VALUE;
+
+				maxY = -Number.MAX_VALUE;
+				minY = Number.MAX_VALUE;
+
+				for(var i = 0; i<position_data.length; i++){
+					var x = parseFloat(position_data[i].x);
+					var y = parseFloat(position_data[i].y);
+					if(x > maxX){maxX = x;}
+					if(x < minX){minX = x;}
+
+					if(y > maxY){maxY = y;}
+					if(y < minY){minY = y;}
+				}
+
+				swidth = maxX - minX;
+				sheight = maxY - minY;
+
+				sx = width/swidth;
+				sy = height/sheight;
+
+				if(!ss){
+					if(sx<sy){
+						sy = sx;
+						syo = ((height)-sheight*sy)/2;
+					}else{
+						sx = sy;
+						sxo = ((width)-swidth*sx)/2;
+					}
+				}
+
+				for(var i = 0; i<position_data.length; i++){
+					position_data[i].sx = Math.round((parseFloat(position_data[i].x)-minX)*sx);
+					position_data[i].sy = Math.round((parseFloat(position_data[i].y)-minY)*sy);
+				}
+			}
+		}
+
+		buildNMAP(d3.select("#svg1"), "data/bundeslaender_processed.json");
+		buildNMAP(d3.select("#svg2"), "data/londonBoroughs_processed.json");
+		buildNMAP(d3.select("#svg3"), "data/us_states_processed.json");
+
+		</script>
+	</body>
+</html>
