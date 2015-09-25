@@ -5,7 +5,7 @@ Extension to the nmap algorithm to derive at an equal-sized treemap within a rec
 
 ## Method
 
-The function is a helper for equally sized treemap generation, using the nmap algorithm. The approach adds new empty points to the set to achieve a square number of points that can be then visualized with the same are.
+The function is a helper for equally sized treemap generation, using the nmap algorithm. The approach adds new empty points to the set to achieve a square number of points that can be then visualized with the same area.
 
 Two examples with US states and London Boroughs, can be found [here](http://prjcts.sebastianmeier.eu/nmap/squared/examples/index.html)
 
