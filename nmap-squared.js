@@ -73,13 +73,18 @@ var nmap_squared = function(args){
 
 		//Create the result array with new positions which are normalized to the available space
 		for(i = 0; i<attr.data.length; i++){
-			result.push({
-				x:(parseFloat(attr.data[i].x)-minX)*sx+1,
-				y:(parseFloat(attr.data[i].y)-minY)*sy+1,
-				//For the nmap algorithm this highlights an original position
-				//0 indicates empty cells added by this algorithm
-				class:1
-			});
+			var t_item = {};
+			for(var key in attr.data[i]){
+				t_item[key] = attr.data[i][key];
+			}
+
+			//For the nmap algorithm this highlights an original position
+			//0 indicates empty cells added by this algorithm
+			t_item.class = 1;
+			t_item.x = (parseFloat(attr.data[i].x)-minX)*sx+1;
+			t_item.y = (parseFloat(attr.data[i].y)-minY)*sy+1;
+
+			result.push(t_item);
 		}
 
 		//How many empty cells do we need to add to the set?
