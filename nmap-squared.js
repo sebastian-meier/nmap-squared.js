@@ -12,6 +12,7 @@
 * @param {integer|float} args.width=1 - width of the available space
 * @param {boolean} args.square=true||false -  Create either a square number of rects or not
 * @param {string} args.method="border||quad" -  Filling method either border or quad(tree) approach
+* @param {float} args.border_adv=false - Border Special method, to favour existing points over new points
 * @return {object} nmap_squared
 */
 
@@ -23,7 +24,8 @@ var nmap_squared = function(args){
 		height:1,
 		width:1,
 		square:false,
-		method:"border"
+		method:"border",
+		border_adv:1
 	};
 
 	//given arguments and defaults
@@ -176,6 +178,9 @@ var nmap_squared = function(args){
 		for(var i = 0; i<array1.length; i++){
 			for(var ii = 0; ii<array2.length; ii++){
 				var t_dist = Math.sqrt((array1[i].x-array2[ii].x)*(array1[i].x-array2[ii].x)+(array1[i].y-array2[ii].y)*(array1[i].y-array2[ii].y));
+				if(array2[ii].class===0){
+					t_dist *= attr.border_adv;
+				}
 				if(t_dist < array1[i].dist){
 					array1[i].dist = t_dist;
 				}

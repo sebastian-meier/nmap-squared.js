@@ -25,7 +25,9 @@ var border = nmap_squared({
 	//Approach to use either border or quad
 	method:"border",
 	//Decide if to generate a 4*n number of rows and cols
-	square:false
+	square:false,
+	//Priorities original points over added points
+	border_adv:1
 });
 
 var border_elements = [];
