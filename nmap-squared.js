@@ -10,6 +10,7 @@
 * @param {flaot|integer} args.data[].y - y position
 * @param {integer|float} args.height=1 - height of the available space
 * @param {integer|float} args.width=1 - width of the available space
+* @param {boolean} args.square=true||false -  Create either a square number of rects or not
 * @param {string} args.method="border||quad" -  Filling method either border or quad(tree) approach
 * @return {object} nmap_squared
 */
@@ -21,6 +22,7 @@ var nmap_squared = function(args){
 		data:[],
 		height:1,
 		width:1,
+		square:false,
 		method:"border"
 	};
 
@@ -70,8 +72,8 @@ var nmap_squared = function(args){
 		//Create the result array with new positions which are normalized to the available space
 		for(i = 0; i<attr.data.length; i++){
 			result.push({
-				x:(parseFloat(attr.data[i].x)-minX)*sx,
-				y:(parseFloat(attr.data[i].y)-minY)*sy,
+				x:(parseFloat(attr.data[i].x)-minX)*sx+1,
+				y:(parseFloat(attr.data[i].y)-minY)*sy+1,
 				//For the nmap algorithm this highlights an original position
 				//0 indicates empty cells added by this algorithm
 				class:1
@@ -79,9 +81,10 @@ var nmap_squared = function(args){
 		}
 
 		//How many empty cells do we need to add to the set?
-		var grid_size = Math.ceil(Math.sqrt(result.length)),
-			sq_amount = Math.pow(grid_size,2),
-			sq_missing = sq_amount-result.length;
+		var grid_size = ((attr.square) ? Math.ceil(Math.ceil(Math.sqrt(result.length))/4)*4 : Math.ceil(Math.sqrt(result.length))),
+			sq_amount = Math.pow(grid_size,2), 	
+			sq_missing = sq_amount-result.length,
+			ep_num = (1.0/sq_missing);
 
 		//Decide upon which method to use for placing the empty cells?
 		switch(attr.method){
@@ -92,15 +95,15 @@ var nmap_squared = function(args){
 				var extra_points = [];
 
 				//Top and bottom border
-				for(x = 0; x<grid_size; x++){
-					extra_points.push({class:0,dist:Number.MAX_VALUE,x:((swidth*sx)/grid_size*x+((swidth*sx)/grid_size/2)),y:0});
-					extra_points.push({class:0,dist:Number.MAX_VALUE,x:((swidth*sx)/grid_size*x+((swidth*sx)/grid_size/2)),y:(sheight*sy)});
+				for(x = 0; x<=grid_size-ep_num; x+=ep_num){
+					extra_points.push({class:0,dist:Number.MAX_VALUE,x:((swidth*sx)/grid_size*x)+ep_num*Math.random(),y:ep_num*Math.random()});
+					extra_points.push({class:0,dist:Number.MAX_VALUE,x:((swidth*sx)/grid_size*x)+ep_num*Math.random(),y:(sheight*sy)+1+ep_num*Math.random()});
 				}
 
 				//Left and right border
-				for(y = 0; y<grid_size; y++){
-					extra_points.push({class:0,dist:Number.MAX_VALUE,x:0, y:((sheight*sy)/grid_size*y+((sheight*sy)/grid_size/2))});
-					extra_points.push({class:0,dist:Number.MAX_VALUE,x:(swidth*sx),y:((sheight*sy)/grid_size*y+((sheight*sy)/grid_size/2))});
+				for(y = 0; y<=grid_size-ep_num; y+=ep_num){
+					extra_points.push({class:0,dist:Number.MAX_VALUE,x:ep_num*Math.random(), 				y:((sheight*sy)/grid_size*y)+ep_num*Math.random()});
+					extra_points.push({class:0,dist:Number.MAX_VALUE,x:(swidth*sx)+1+ep_num*Math.random(),	y:((sheight*sy)/grid_size*y)+ep_num*Math.random()});
 				}
 
 				//Adding new points until the rectangle is full
@@ -108,8 +111,9 @@ var nmap_squared = function(args){
 					//Choosing the point which is the furthest away from its neighbours 
 					extra_points = squared.calcDist(extra_points, result);
 					result.push(extra_points[extra_points.length-1]);
-					sq_missing--;					
+					sq_missing--;
 				}
+
 			break;
 			case 'quad':
 				/*--- Add empty cells by calculating empty areas with a quadtree function ---*/
@@ -122,25 +126,36 @@ var nmap_squared = function(args){
 				}
 
 				//Initiate d3's quadtree
-				var quad_extent = [[0,0],[(swidth*sx), (sheight*sy)]];
-				var quadtree = d3.geom.quadtree()
-					.extent(quad_extent)
-					(quad_data);
-
-				var qwidth = swidth*sx;
-				var qheight = sheight*sy;
-				if(qwidth < qheight){qwidth = qheight;}{qheight = qwidth;}
-				
-				//Finding the empty squares
-				var emptySquares = squared.checkForEmptySquares(quadtree, 0, qwidth, qheight, 0, 0);
-
-				//Measuring the size of the empty squares
-				emptySquares = squared.measureSquares(emptySquares, swidth*sx, sheight*sy);
-
-				//Add empty squares
+				var quad_extent = [[0,0],[(swidth*sx+2), (sheight*sy+2)]];
 				while(sq_missing>0){
-					result.push(emptySquares[(emptySquares.length-sq_missing)]);
-					sq_missing--;					
+					var quadtree = d3.geom.quadtree()
+						.extent(quad_extent)
+						(quad_data);
+
+					var qwidth = swidth*sx;
+					var qheight = sheight*sy;
+					if(qwidth < qheight){qwidth = qheight;}{qheight = qwidth;}
+					
+					//Finding the empty squares
+					var emptySquares = squared.checkForEmptySquares(quadtree, 0, qwidth, qheight, 0, 0);
+
+					//Measuring the size of the empty squares
+					emptySquares = squared.measureSquares(emptySquares, swidth*sx, sheight*sy);
+
+					//Add empty squares
+					if(emptySquares.length>0){
+						quad_data.push([emptySquares[(emptySquares.length-1)].x,emptySquares[(emptySquares.length-1)].y]);
+						result.push(emptySquares[(emptySquares.length-1)]);
+						sq_missing--;
+					}else{
+						//If quadtree cannot find anymore empty cells add some more empty quads in the upper left corner
+						//This is not really ideal, but quadtree doesn't seems to be useful anyway
+						var ep_plus = ep_num/sq_missing;
+						while(sq_missing>0){
+							result.push({x:ep_num+ep_plus*sq_missing,y:ep_num+ep_plus});
+							sq_missing--;
+						}
+					}
 				}
 			break;
 		}
@@ -358,5 +373,5 @@ var nmap_squared = function(args){
 
 	squared();
 
-	return {width:swidth*sx, height:sheight*sy, data:result};
+	return {width:swidth*sx+2, height:sheight*sy+2, data:result};
 };

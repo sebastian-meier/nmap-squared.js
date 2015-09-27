@@ -28,8 +28,8 @@
 			d3.json(file, function(data) {
 
 				//Running the algorithm
-				var border = nmap_squared({width:300,height:300,data:data,method:"border"});
-				var quad = nmap_squared({width:300,height:300,data:data,method:"quad"});
+				var border = nmap_squared({width:300,height:300,data:data,method:"border",square:true});
+				var quad = nmap_squared({width:300,height:300,data:data,method:"quad",square:true});
 
 				//Drawing the result
 				var g = d3.select("#svg").append("g").attr("transform", "translate("+(id*340+10)+",10)");
